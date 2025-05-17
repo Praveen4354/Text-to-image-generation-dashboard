@@ -39,7 +39,7 @@ with st.sidebar:
     style = st.selectbox("Art Style", ["Realism", "Watercolor", "Cyberpunk", "Anime", "Oil Painting"])
     guidance_scale = st.slider("Guidance Scale", 1.0, 20.0, 7.5, 0.1, help="Controls how closely the image follows the prompt")
     image_size = st.selectbox("Image Size", ["256x256", "512x512"], index=0)
-    num_steps = st.slider("Inference Steps", 10, 100, 30, 5, help="Higher steps improve quality but take longer")
+    num_steps = st.slider("Inference Steps", 10, 100, 20, 5, help="Higher steps improve quality but take longer")
 
     st.subheader("Sample Prompts")
     sample_prompt = st.selectbox("Choose a sample", [""] + sample_prompts)
@@ -56,8 +56,7 @@ with col1:
                 # Initialize Stable Diffusion
                 pipe = StableDiffusionPipeline.from_pretrained(
                     "runwayml/stable-diffusion-v1-5",
-                    torch_dtype=torch.float16,
-                    use_auth_token=st.secrets.get("HUGGINGFACE_TOKEN", os.getenv("HUGGINGFACE_TOKEN"))
+                    torch_dtype=torch.float16
                 )
                 pipe = pipe.to("cpu")  # Render free tier uses CPU
 
@@ -80,6 +79,8 @@ with col1:
 
             except Exception as e:
                 st.error(f"Error generating image: {str(e)}")
+                if "authentication" in str(e).lower() or "license" in str(e).lower():
+                    st.warning("Ensure you have accepted the license at https://huggingface.co/runwayml/stable-diffusion-v1-5. If issues persist, consider adding a HUGGINGFACE_TOKEN environment variable.")
 
     # Display image
     if st.session_state.generated_image:
