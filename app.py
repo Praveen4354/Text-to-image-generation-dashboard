@@ -2,6 +2,13 @@ import streamlit as st
 import torch
 from diffusers import StableDiffusionPipeline
 import random
+import signal
+import time
+import gc
+
+# Timeout handler
+def timeout_handler(signum, frame):
+    raise TimeoutError("Image generation took too long!")
 
 # Initialize session state
 if 'generated_image' not in st.session_state:
@@ -23,23 +30,23 @@ h1, h2 { color: #333; font-family: 'Arial', sans-serif; }
 </style>
 """, unsafe_allow_html=True)
 
-# Hardcoded sample prompts
+# Hardcoded sample prompts (simplified for faster processing)
 sample_prompts = [
-    "A mystical forest with glowing mushrooms",
-    "A futuristic city at sunset",
-    "A serene beach with pastel skies",
-    "A steampunk airship in the clouds",
-    "A dragon soaring over a medieval castle"
+    "A tree",
+    "A house",
+    "A flower",
+    "A cloud",
+    "A star"
 ]
 
 # Sidebar
 with st.sidebar:
     st.header("Image Generation Settings")
-    prompt = st.text_area("Enter your prompt:", placeholder="A futuristic city at sunset", height=100)
+    prompt = st.text_area("Enter your prompt:", placeholder="A tree", height=100)
     style = st.selectbox("Art Style", ["Realism", "Watercolor", "Cyberpunk", "Anime", "Oil Painting"])
-    guidance_scale = st.slider("Guidance Scale", 1.0, 20.0, 7.5, 0.1, help="Controls how closely the image follows the prompt")
-    image_size = st.selectbox("Image Size", ["256x256"], index=0)  # Fixed to 256x256
-    num_steps = st.slider("Inference Steps", 10, 50, 15, 5, help="Higher steps improve quality but take longer")
+    guidance_scale = st.slider("Guidance Scale", 1.0, 10.0, 5.0, 0.1, help="Lower values are faster")
+    image_size = st.selectbox("Image Size", ["64x64", "32x32"], index=0)
+    num_steps = st.slider("Inference Steps", 5, 10, 5, 1, help="Fewer steps are faster")
 
     st.subheader("Sample Prompts")
     sample_prompt = st.selectbox("Choose a sample", [""] + sample_prompts)
@@ -51,20 +58,29 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.header("Generated Image")
     if st.button("Generate Image"):
-        with st.spinner("Generating image..."):
+        with st.spinner("Generating image (may take 1-2 minutes)..."):
             try:
-                # Cache pipeline to reduce memory usage
+                # Set timeout (4 minutes)
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(240)  # 4 minutes
+
+                # Cache pipeline
                 @st.cache_resource
                 def load_pipeline():
-                    return StableDiffusionPipeline.from_pretrained(
-                        "runwayml/stable-diffusion-v1-5",
-                        torch_dtype=torch.float16
+                    pipe = StableDiffusionPipeline.from_pretrained(
+                        "stabilityai/stable-diffusion-2-1-base",
+                        torch_dtype=torch.float16,
+                        low_cpu_mem_usage=True
                     )
+                    # Enable memory-efficient attention
+                    pipe.enable_attention_slicing()
+                    return pipe
+
                 pipe = load_pipeline()
                 pipe = pipe.to("cpu")  # Render free tier uses CPU
 
-                # Modify prompt with style
-                styled_prompt = f"{prompt}, in {style.lower()} style"
+                # Modify prompt with style (truncate to 50 chars for speed)
+                styled_prompt = f"{prompt[:50]}, in {style.lower()} style"
                 width, height = map(int, image_size.split("x"))
                 image = pipe(
                     styled_prompt,
@@ -74,16 +90,30 @@ with col1:
                     height=height
                 ).images[0]
 
+                # Disable timeout
+                signal.alarm(0)
+
                 # Save to session state
                 st.session_state.generated_image = image
 
                 # Rule-based description
-                st.session_state.description = f"This image showcases a {style.lower()} depiction of {prompt.lower()}. The composition features vibrant colors and intricate details, capturing the essence of the described scene."
+                st.session_state.description = f"A {style.lower()} image of {prompt[:50].lower()} with vivid details."
 
+                # Clean up memory
+                gc.collect()
+                torch.cuda.empty_cache() if torch.cuda.is_available() else None
+
+            except TimeoutError:
+                st.error("Image generation timed out. Try 32x32 size or simpler prompt.")
+            except RuntimeError as e:
+                if "out of memory" in str(e).lower():
+                    st.error("Memory limit exceeded. Try 32x32 size and 5 steps.")
+                else:
+                    st.error(f"Error generating image: {str(e)}")
             except Exception as e:
                 st.error(f"Error generating image: {str(e)}")
                 if "authentication" in str(e).lower() or "license" in str(e).lower():
-                    st.warning("Ensure you have accepted the license at https://huggingface.co/runwayml/stable-diffusion-v1-5. If issues persist, consider adding a HUGGINGFACE_TOKEN environment variable.")
+                    st.warning("Ensure you have accepted the license at https://huggingface.co/stabilityai/stable-diffusion-2-1-base.")
 
     # Display image
     if st.session_state.generated_image:
