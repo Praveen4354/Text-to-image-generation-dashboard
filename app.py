@@ -38,8 +38,8 @@ with st.sidebar:
     prompt = st.text_area("Enter your prompt:", placeholder="A futuristic city at sunset", height=100)
     style = st.selectbox("Art Style", ["Realism", "Watercolor", "Cyberpunk", "Anime", "Oil Painting"])
     guidance_scale = st.slider("Guidance Scale", 1.0, 20.0, 7.5, 0.1, help="Controls how closely the image follows the prompt")
-    image_size = st.selectbox("Image Size", ["256x256", "512x512"], index=0)
-    num_steps = st.slider("Inference Steps", 10, 100, 20, 5, help="Higher steps improve quality but take longer")
+    image_size = st.selectbox("Image Size", ["256x256"], index=0)  # Fixed to 256x256
+    num_steps = st.slider("Inference Steps", 10, 50, 15, 5, help="Higher steps improve quality but take longer")
 
     st.subheader("Sample Prompts")
     sample_prompt = st.selectbox("Choose a sample", [""] + sample_prompts)
@@ -53,11 +53,14 @@ with col1:
     if st.button("Generate Image"):
         with st.spinner("Generating image..."):
             try:
-                # Initialize Stable Diffusion
-                pipe = StableDiffusionPipeline.from_pretrained(
-                    "runwayml/stable-diffusion-v1-5",
-                    torch_dtype=torch.float16
-                )
+                # Cache pipeline to reduce memory usage
+                @st.cache_resource
+                def load_pipeline():
+                    return StableDiffusionPipeline.from_pretrained(
+                        "runwayml/stable-diffusion-v1-5",
+                        torch_dtype=torch.float16
+                    )
+                pipe = load_pipeline()
                 pipe = pipe.to("cpu")  # Render free tier uses CPU
 
                 # Modify prompt with style
