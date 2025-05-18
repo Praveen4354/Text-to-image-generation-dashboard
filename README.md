@@ -1,6 +1,6 @@
 # Text-to-Image Generation
 
-![Text-to-Image UI](https://via.placeholder.com/800x400.png?text=Text-to-Image+Generation+UI) <!-- Replace with actual screenshot if available -->
+
 
 A Streamlit web application that generates images from text prompts using a pre-trained Stable Diffusion model via the Hugging Face API. Users can input a text description (e.g., "A futuristic city at sunset"), adjust parameters like image size, and view the generated image in a modern UI. The project leverages pre-trained deep learning models for image generation, making it accessible without extensive training.
 
